@@ -21,7 +21,12 @@ def list_partitions(image_path):
         match = partition_pattern.match(line)
         if match:
             partition_info = match.groupdict()
-            partitions.append(partition_info)
+            partitions.append({
+                "start" : partition_info['Start'],
+                "size"  : partition_info['Length'],
+                "type"  : partition_info['Description'],
+                "name"  : ""
+            })
     return partitions
 
 def find_files(partition):
