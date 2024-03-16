@@ -1,5 +1,7 @@
 import subprocess
 import yaml
+import sys
+import re
 
 def run_command(command):
     # Execute a command line command and return the output
@@ -29,30 +31,36 @@ def list_partitions(image_path):
             })
     return partitions
 
-def find_files(partition):
+def find_files(image_path, partition):
     # Use fls to list and filter the files of interest in the partition
-    command = f"fls -f ewf -r -o {partition['start']} {image_path} > {partition['name']}_fls.txt"
+    command = f"fls -o {partition['start']} -f ntfs -r {image_path} > output.txt"
     run_command(command)
-    with open(f"{partition['name']}_fls.txt", "r") as f:
-        output = f.read()
     files = []
-    for line in output.splitlines():
-        if "d." in line:
-            # Skip directories
-            continue
-        file_name, size, start, _ = line.split()
-        files.append({
-            "name": file_name,
-            "size": size,
-            "start": start,
-        })
+    with open(f"output.txt", "r") as f:
+        while True:
+            data = f.readline()
+            if not data:
+                break
+            splited_data = data.split()
+            n = len(splited_data)
+            # ['+', '-/r', '*', '35277-128-5:', 'fil.pak.DATA']
+            for item in splited_data:
+                splited_item = item.split("-")
+                # Add file only
+                if len(splited_item) == 3:
+                    file_id = splited_item[0]
+                    if  "r/r"  in splited_data:
+                        files.append({
+                            "id" : file_id,
+                            "name" : splited_data[n - 1]
+                        })
     return files
 
-def extract_files(file_ids, partition, output_dir):
+def extract_file(image_path, file, partition, output_dir):
     # Use icat to extract the files based on their IDs
-    for file_id in file_ids:
-        command = f"icat -f ewf -o {partition['start']} {image_path} {file_id} > {output_dir}/{file_id}"
-        run_command(command)
+    # icat -o 0000673792 -r disk.E01 35643
+    command = f"icat -o {partition['start']} {image_path} {file['id']} > {output_dir}/{file['name']}"
+    run_command(command)
 
 def extract_registry_and_user_hives(image_path, output_dir):
     # Extract registry hives
@@ -66,10 +74,12 @@ def extract_registry_and_user_hives(image_path, output_dir):
 
     partitions = list_partitions(image_path)
     for partition in partitions:
-        files = find_files(partition)
-        for file in files:
-            if file["name"] in registry_hives:
-                extract_files([file["start"]], partition, output_dir)
+        if "data" in partition['type']:
+            files = find_files(image_path, partition)
+            for file in files:
+                print(f"Extracting: {file}...\n")
+                extract_file(image_path, file, partition, output_dir)
+    return 
 
     # Extract user hives
     user_hives = [
@@ -78,11 +88,13 @@ def extract_registry_and_user_hives(image_path, output_dir):
         'Users\\*\\ntuser.dat.LOG2',
     ]
 
-    for partition in partitions:
-        files = find_files(partition)
-        for file in files:
-            if file["name"] in user_hives:
-                extract_files([file["start"]], partition, output_dir)
+    print(f"PARITION: {partitions}")
+    # for partition in partitions:
+    #     files = find_files(image_path, partition)
+    #     for file in files:
+    #         if file["name"] in user_hives:
+    #             print(f"File: {file}")
+    #             extract_files(image_path, [file["start"]], partition, output_dir)
 
 def extract_browser_data(image_path, output_dir):
     browser_data_paths = [
@@ -129,10 +141,13 @@ def main():
     image_path = sys.argv[1]
     output_dir = sys.argv[2]
 
+    # res = list_partitions(image_path)
+    # print(f"Res: {res}")
+
     extract_registry_and_user_hives(image_path, output_dir)
-    extract_browser_data(image_path, output_dir)
-    extract_logs(image_path, output_dir)
-    extract_mft(image_path, output_dir)
+    # extract_browser_data(image_path, output_dir)
+    # extract_logs(image_path, output_dir)
+    # extract_mft(image_path, output_dir)
 
 if __name__ == "__main__":
     main()
