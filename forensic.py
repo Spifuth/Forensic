@@ -11,18 +11,17 @@ def run_command(command):
 
 def list_partitions(image_path):
     # Use mmls to list the partitions of the disk image
-    command = f"mmls -f ewf {image_path}"
+    command = f"mmls -r {image_path}"
     output = run_command(command)
+    # regex that extract paritions informations 
+    partition_pattern = re.compile(r"\d{3}:\s+(?P<Slot>\S+)\s+(?P<Start>\d+)\s+(?P<End>\d+)\s+(?P<Length>\d+)\s+(?P<Description>.+)")
+
     partitions = []
     for line in output.splitlines():
-        if "Ewf" in line:
-            start, size, type_str, name = line.split()
-            partitions.append({
-                "start": start,
-                "size": size,
-                "type": type_str,
-                "name": name,
-            })
+        match = partition_pattern.match(line)
+        if match:
+            partition_info = match.groupdict()
+            partitions.append(partition_info)
     return partitions
 
 def find_files(partition):
